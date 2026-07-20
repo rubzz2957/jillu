@@ -1,0 +1,120 @@
+:root {
+  --gold-primary: #d4af37;
+  --gold-light: #f3e5ab;
+  --bg-dark: #0a0a0a;
+  --card-bg: #141414;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: #ffffff;
+  overflow-x: hidden;
+}
+
+.gold-text {
+  color: var(--gold-primary);
+  letter-spacing: 1px;
+}
+
+/* --- CURTAIN ANIMATION OVERLAY --- */
+.curtain-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.curtain-panel {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(135deg, #111 0%, #000 100%);
+  border-right: 2px solid var(--gold-primary);
+  transition: transform 1.5s cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+.curtain-panel.left {
+  left: 0;
+  border-right: 2px solid var(--gold-primary);
+}
+
+.curtain-panel.right {
+  right: 0;
+  border-left: 2px solid var(--gold-primary);
+}
+
+.curtain-panel.left.open {
+  transform: translateX(-100%);
+}
+
+.curtain-panel.right.open {
+  transform: translateX(100%);
+}
+
+.curtain-logo-wrapper {
+  position: relative;
+  z-index: 10000;
+  text-align: center;
+  transition: opacity 0.8s ease;
+}
+
+.curtain-logo-wrapper.fade-out {
+  opacity: 0;
+}
+
+/* --- NAVBAR --- */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+  background: #0d0d0d;
+}
+
+.nav-links {
+  display: flex;
+  gap: 25px;
+  list-style: none;
+}
+
+.nav-links li {
+  color: #aaa;
+  cursor: pointer;
+  font-weight: bold;
+  transition: color 0.3s;
+}
+
+.nav-links li.active, .nav-links li:hover {
+  color: var(--gold-primary);
+}
+
+.btn-gold {
+  background: linear-gradient(45deg, #d4af37, #f3e5ab);
+  color: #000;
+  border: none;
+  padding: 12px 25px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+}
