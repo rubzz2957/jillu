@@ -1,14 +1,14 @@
 {
   "files": {
     "main.css": "/jillu/static/css/main.2caa5389.css",
-    "main.js": "/jillu/static/js/main.dfd15974.js",
+    "main.js": "/jillu/static/js/main.c12603d6.js",
     "static/media/WhatsApp Image 2026-07-20 at 9.49.24 PM.jpeg": "/jillu/static/media/WhatsApp Image 2026-07-20 at 9.49.24 PM.0cb6d21e4a795977c705.jpeg",
     "index.html": "/jillu/index.html",
     "main.2caa5389.css.map": "/jillu/static/css/main.2caa5389.css.map",
-    "main.dfd15974.js.map": "/jillu/static/js/main.dfd15974.js.map"
+    "main.c12603d6.js.map": "/jillu/static/js/main.c12603d6.js.map"
   },
   "entrypoints": [
     "static/css/main.2caa5389.css",
-    "static/js/main.dfd15974.js"
+    "static/js/main.c12603d6.js"
   ]
 }
