@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import JSZip from 'jszip';
 import './App.css';
+import { PORTFOLIO_ITEMS as DATA_PORTFOLIO_ITEMS } from './data';
 
+const PUBLIC_URL = process.env.PUBLIC_URL || (typeof window !== 'undefined' && window.location.pathname.includes('/jillu') ? '/jillu' : '');
 const logoImg = require('./WhatsApp Image 2026-07-20 at 9.49.24 PM.jpeg');
 
 // Distinct Image Bundles to keep Services and Gallery completely unique
@@ -24,7 +26,9 @@ const GALLERY_IMAGES = {
   velvetDrapes: 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=800&q=80',
   balconyMesh: 'https://images.unsplash.com/photo-1502005229762-cf1b2da7c5d6?auto=format&fit=crop&w=800&q=80',
   slidingNet: 'https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?auto=format&fit=crop&w=800&q=80',
-  windowPinch: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
+  doorNet1: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Screen_door_interior.jpg/800px-Screen_door_interior.jpg',
+  doorNet2: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Screen-door-3050.jpg/800px-Screen-door-3050.jpg',
+  doorNet3: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Screen-door-with-frame.jpg/800px-Screen-door-with-frame.jpg',
   bedroomLuxury: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80',
 };
 
@@ -33,6 +37,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [zipImages, setZipImages] = useState([]);
   const [isLoadingZip, setIsLoadingZip] = useState(true);
+  const [customerPhoto, setCustomerPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [submittedPhotos, setSubmittedPhotos] = useState([]);
 
   // Spotlight animation timer
   useEffect(() => {
@@ -40,40 +47,92 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // ZIP loader for Gallery
-  useEffect(() => {
-    async function loadCatalogZip() {
-      try {
-        const response = await fetch('/catalog.zip');
-        if (!response.ok) throw new Error('ZIP file not found in public/');
-        
-        const blob = await response.blob();
-        const zip = new JSZip();
-        const zipContent = await zip.loadAsync(blob);
-        const imagePromises = [];
-
-        zipContent.forEach((relativePath, zipEntry) => {
-          if (!zipEntry.dir && /\.(png|jpe?g|svg|webp|gif)$/i.test(zipEntry.name)) {
-            const promise = zipEntry.async('blob').then((imgBlob) => ({
-              name: zipEntry.name,
-              url: URL.createObjectURL(imgBlob),
-            }));
-            imagePromises.push(promise);
-          }
-        });
-
-        const extractedImages = await Promise.all(imagePromises);
-        setZipImages(extractedImages);
-      } catch (err) {
-        console.log('Place catalog.zip in client/public/ to auto-load ZIP portfolio.', err);
-      } finally {
-        setIsLoadingZip(false);
-      }
+  const handlePhotoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setCustomerPhoto(null);
+      setPhotoPreview('');
+      return;
     }
 
-    loadCatalogZip();
-  }, []);
+    if (!file.type.startsWith('image/')) {
+      setCustomerPhoto(null);
+      setPhotoPreview('');
+      return;
+    }
 
+    const reader = new FileReader();
+    reader.onloadend = () => setPhotoPreview(reader.result);
+    reader.readAsDataURL(file);
+    setCustomerPhoto(file);
+  };
+
+  const handlePhotoSubmit = () => {
+    if (!customerPhoto || !photoPreview) {
+      return;
+    }
+
+    const newPhoto = {
+      id: Date.now(),
+      title: customerPhoto.name.replace(/\.[^.]+$/, ''),
+      category: 'Customer Upload',
+      src: photoPreview,
+    };
+
+    setSubmittedPhotos((prev) => [newPhoto, ...prev]);
+    setActiveTab('gallery');
+  };
+
+  // ZIP loader for Gallery
+useEffect(() => {
+  async function loadCatalogZip() {
+    try {
+      setIsLoadingZip(true);
+      
+      // 1. Fetch the zip file
+      const response = await fetch(`${PUBLIC_URL}/catalog.zip`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const zip = new JSZip();
+      const zipContent = await zip.loadAsync(blob);
+      const imagePromises = [];
+
+      // 2. Extract image files
+      zipContent.forEach((relativePath, zipEntry) => {
+        // Exclude system hidden files (like __MACOSX) and folders
+        const isMacFile = relativePath.includes('__MACOSX');
+        const isImage = /\.(png|jpe?g|svg|webp|gif)$/i.test(zipEntry.name);
+
+        if (!zipEntry.dir && !isMacFile && isImage) {
+          const promise = zipEntry.async('blob').then((imgBlob) => ({
+            name: zipEntry.name.split('/').pop(), // Get clean file name without subfolders
+            url: URL.createObjectURL(imgBlob),
+          }));
+          imagePromises.push(promise);
+        }
+      });
+
+      // 3. Wait for all blobs to convert
+      const extractedImages = await Promise.all(imagePromises);
+
+      console.log("Successfully extracted images:", extractedImages.length);
+
+      // 4. Update state
+      if (extractedImages.length > 0) {
+        setZipImages(extractedImages);
+      }
+    } catch (err) {
+      console.error('Error reading catalog.zip:', err);
+    } finally {
+      setIsLoadingZip(false);
+    }
+  }
+
+  loadCatalogZip();
+}, []);
   return (
     <div className="app-container" style={{ minHeight: '100vh', background: '#080808', color: '#fff', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
       
@@ -207,8 +266,8 @@ function App() {
         {activeTab === 'home' && <HomePage setActiveTab={setActiveTab} />}
         {activeTab === 'about' && <AboutPage setActiveTab={setActiveTab} />}
         {activeTab === 'services' && <ServicesPage setActiveTab={setActiveTab} />}
-        {activeTab === 'gallery' && <GalleryPage zipImages={zipImages} isLoading={isLoadingZip} setActiveTab={setActiveTab} />}
-        {activeTab === 'contact' && <ContactPage />}
+        {activeTab === 'gallery' && <GalleryPage zipImages={zipImages} isLoading={isLoadingZip} setActiveTab={setActiveTab} uploadedPhotos={submittedPhotos} />}
+        {activeTab === 'contact' && <ContactPage customerPhoto={customerPhoto} photoPreview={photoPreview} onPhotoUpload={handlePhotoUpload} onSubmitPhoto={handlePhotoSubmit} />}
       </main>
 
       {/* FOOTER WITH SOCIAL MEDIA LOGOS */}
@@ -244,7 +303,7 @@ function App() {
             <div style={{ display: 'flex', gap: '15px' }}>
               
               {/* Instagram SVG */}
-              <a href="#instagram" className="social-logo-btn" title="Instagram">
+              <a href="https://www.instagram.com/__harikrishnan_dhanapal_/" target="_blank" rel="noreferrer noopener" className="social-logo-btn" title="Instagram">
                 <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                 </svg>
@@ -258,16 +317,9 @@ function App() {
               </a>
 
               {/* WhatsApp SVG */}
-              <a href="#whatsapp" className="social-logo-btn" title="WhatsApp">
+              <a href="https://wa.me/917502718156" target="_blank" rel="noreferrer noopener" className="social-logo-btn" title="WhatsApp">
                 <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
-                </svg>
-              </a>
-
-              {/* YouTube SVG */}
-              <a href="#youtube" className="social-logo-btn" title="YouTube">
-                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                 </svg>
               </a>
 
@@ -525,7 +577,7 @@ const AboutPage = ({ setActiveTab }) => (
 
     {/* Section 3: In-House Tailoring Workshop */}
     <section style={{ background: '#121212', padding: '45px', borderRadius: '12px', border: '1px solid #222', marginBottom: '70px' }}>
-      <h2 className="gold-text" style={{ textAlign: 'center', marginBottom: '30px' }}>In-House Fabrication Unit</h2>
+     <h2 className="gold-text" style={{ textAlign: 'center', marginBottom: '30px' }}>In-House Fabrication Unit</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '25px' }}>
         <div><h4 className="gold-text">Zero Subcontracting</h4><p style={{ color: '#888', fontSize: '0.88rem' }}>Every curtain is stitched in our controlled studio.</p></div>
         <div><h4 className="gold-text">Double-Fold Hems</h4><p style={{ color: '#888', fontSize: '0.88rem' }}>Ensures perfect curtain fall without curling edges.</p></div>
@@ -593,8 +645,9 @@ const AboutPage = ({ setActiveTab }) => (
     </section>
   </div>
 );
+
 /* ==========================================================================
-   3. SERVICES PAGE (10 SECTIONS - STRICT SERVICE SPECIFICATIONS, NO ZIP CATALOG)
+   3. SERVICES PAGE (10 SECTIONS - STRICT SERVICE SPECIFICATIONS)
    ========================================================================== */
 const ServicesPage = ({ setActiveTab }) => (
   <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
@@ -733,10 +786,19 @@ const ServicesPage = ({ setActiveTab }) => (
 
   </div>
 );
+
 /* ==========================================================================
-   4. GALLERY PAGE (10 SECTIONS - EXCLUSIVE VISUAL GALLERY & PORTFOLIO)
+   4. GALLERY PAGE (PORTFOLIO GALLERY)
    ========================================================================== */
-const GalleryPage = ({ zipImages, isLoading, setActiveTab }) => (
+
+const PORTFOLIO_ITEMS = DATA_PORTFOLIO_ITEMS.map((item) => ({
+  id: item.id,
+  title: item.title,
+  category: item.category,
+  src: `${PUBLIC_URL}/images/${encodeURIComponent(item.image)}`,
+}));
+
+const GalleryPage = ({ setActiveTab, uploadedPhotos }) => (
   <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
     
     {/* Section 1: Intro */}
@@ -746,55 +808,46 @@ const GalleryPage = ({ zipImages, isLoading, setActiveTab }) => (
       <p style={{ color: '#aaa', fontSize: '1.1rem' }}>Browse high-resolution photographs of our real customer drape setups and mosquito screen installations.</p>
     </section>
 
-    {/* Section 2: ZIP Extracted Photo Gallery */}
-    <section style={{ marginBottom: '70px' }}>
-      <h2 className="gold-text" style={{ textAlign: 'center', marginBottom: '25px' }}>Uploaded ZIP Portfolio Archive ({zipImages.length} Photos)</h2>
-      {isLoading ? (
-        <p style={{ color: '#d4af37', textAlign: 'center' }}>Unpacking photos...</p>
-      ) : zipImages.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
-          {zipImages.map((img, idx) => (
-            <div key={idx} className="animated-card" style={{ background: '#121212', border: '1px solid #d4af37', borderRadius: '8px', padding: '10px' }}>
-              <img src={img.url} alt={img.name} style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '6px' }} />
+    {uploadedPhotos.length > 0 && (
+      <section style={{ marginBottom: '70px' }}>
+        <h2 className="gold-text" style={{ textAlign: 'center', marginBottom: '30px' }}>Customer Uploads</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '25px' }}>
+          {uploadedPhotos.map((item) => (
+            <div key={item.id} className="animated-card" style={{ background: '#121212', border: '1px solid #222', borderRadius: '10px', overflow: 'hidden' }}>
+              <img src={item.src} alt={item.title} style={{ width: '100%', height: '260px', objectFit: 'cover' }} />
+              <div style={{ padding: '20px' }}>
+                <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#d4af37', background: '#1a1810', padding: '4px 10px', borderRadius: '4px' }}>
+                  {item.category}
+                </span>
+                <h3 style={{ color: '#eee', fontSize: '1.1rem', marginTop: '12px', marginBottom: '0' }}>{item.title}</h3>
+              </div>
             </div>
           ))}
         </div>
-      ) : (
-        <p style={{ color: '#888', textAlign: 'center' }}>Add <code>catalog.zip</code> to <code>client/public/</code> to render catalog photos here.</p>
-      )}
-    </section>
+      </section>
+    )}
 
-    {/* Section 3: Gallery Category 1 - Luxury Velvet & Sheer Living Rooms */}
+    {/* Section 2: Separate Portfolio Showcase */}
     <section style={{ marginBottom: '70px' }}>
-      <h2 className="gold-text" style={{ fontSize: '2rem', marginBottom: '25px', textAlign: 'center' }}>1. Luxury Velvet & Sheer Living Rooms</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-        <img className="animated-card" src={GALLERY_IMAGES.velvetDrapes} alt="Velvet Drapes" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '8px' }} />
-        <img className="animated-card" src={GALLERY_IMAGES.sheerVoile} alt="Sheer Voile" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '8px' }} />
-        <img className="animated-card" src={GALLERY_IMAGES.windowPinch} alt="Pinch Pleat" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '8px' }} />
-      </div>
-    </section>
-
-    {/* Section 4: Gallery Category 2 - Pleated Balcony Mosquito Mesh Doors */}
-    <section style={{ background: '#121212', padding: '40px 20px', borderRadius: '12px', marginBottom: '70px' }}>
-      <h2 className="gold-text" style={{ fontSize: '2rem', marginBottom: '25px', textAlign: 'center' }}>2. Balcony & Sliding Door Mosquito Screens</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-        <img className="animated-card" src={GALLERY_IMAGES.balconyMesh} alt="Balcony Net" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '8px' }} />
-        <img className="animated-card" src={GALLERY_IMAGES.slidingNet} alt="Sliding Mesh" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '8px' }} />
-      </div>
-    </section>
-
-    {/* Section 5: Gallery Category 3 - Bedroom Blackout Sanctuary Setups */}
-    <section style={{ marginBottom: '70px' }}>
-      <h2 className="gold-text" style={{ fontSize: '2rem', marginBottom: '25px', textAlign: 'center' }}>3. Bedroom Blackout Sanctuaries</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-        <img className="animated-card" src={GALLERY_IMAGES.bedroomLuxury} alt="Bedroom Blackout" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '8px' }} />
-        <img className="animated-card" src={SERVICE_IMAGES.blackout} alt="Darkened Bedroom" style={{ width: '100%', height: '280px', objectFit: 'cover', borderRadius: '8px' }} />
+      <h2 className="gold-text" style={{ textAlign: 'center', marginBottom: '30px' }}>Our Featured Portfolio</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '25px' }}>
+        {PORTFOLIO_ITEMS.map((item) => (
+          <div key={item.id} className="animated-card" style={{ background: '#121212', border: '1px solid #222', borderRadius: '10px', overflow: 'hidden' }}>
+            <img src={item.src} alt={item.title} style={{ width: '100%', height: '260px', objectFit: 'cover' }} />
+            <div style={{ padding: '20px' }}>
+              <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#d4af37', background: '#1a1810', padding: '4px 10px', borderRadius: '4px' }}>
+                {item.category}
+              </span>
+              <h3 style={{ color: '#eee', fontSize: '1.1rem', marginTop: '12px', marginBottom: '0' }}>{item.title}</h3>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
 
     {/* Section 6: Texture & Fabric Swatch Previews */}
     <section style={{ background: '#0e0e0e', padding: '40px', borderRadius: '12px', border: '1px solid #222', marginBottom: '70px', textAlign: 'center' }}>
-      <h2 className="gold-text" style={{ marginBottom: '15px' }}>4. Fabric Texture Close-ups</h2>
+      <h2 className="gold-text" style={{ marginBottom: '15px' }}>1. Fabric Texture Close-ups</h2>
       <p style={{ color: '#888', marginBottom: '30px' }}>Detailed look at our linen weaves, satin backs, and fiberglass wire mesh density.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
         <div style={{ padding: '20px', background: '#141414', border: '1px solid #333', borderRadius: '6px', color: '#ccc' }}>Linen Weave</div>
@@ -806,7 +859,7 @@ const GalleryPage = ({ zipImages, isLoading, setActiveTab }) => (
 
     {/* Section 7: Pleat Style Comparison */}
     <section style={{ marginBottom: '70px', textAlign: 'center' }}>
-      <h2 className="gold-text" style={{ fontSize: '2rem', marginBottom: '25px' }}>5. Heading & Pleat Styling Options</h2>
+      <h2 className="gold-text" style={{ fontSize: '2rem', marginBottom: '25px' }}>2. Heading & Pleat Styling Options</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
         <div style={{ padding: '25px', background: '#121212', border: '1px solid #222', borderRadius: '8px' }}><h4 className="gold-text">Pinch Pleat</h4><p style={{ color: '#888', fontSize: '0.85rem', marginTop: '5px' }}>Traditional tailored luxury</p></div>
         <div style={{ padding: '25px', background: '#121212', border: '1px solid #222', borderRadius: '8px' }}><h4 className="gold-text">Grommet Ring</h4><p style={{ color: '#888', fontSize: '0.85rem', marginTop: '5px' }}>Modern casual look</p></div>
@@ -816,16 +869,10 @@ const GalleryPage = ({ zipImages, isLoading, setActiveTab }) => (
 
     {/* Section 8: Commercial Installations Showcase */}
     <section style={{ background: '#121212', padding: '40px', borderRadius: '12px', marginBottom: '70px', textAlign: 'center' }}>
-      <h2 className="gold-text" style={{ marginBottom: '15px' }}>6. Villa & Hotel Project Highlights</h2>
+      <h2 className="gold-text" style={{ marginBottom: '15px' }}>3. Villa & Hotel Project Highlights</h2>
       <p style={{ color: '#aaa', maxWidth: '750px', margin: '0 auto' }}>
         Showcasing floor-to-ceiling installations in luxury penthouses, resort villas, and corporate conference suites.
       </p>
-    </section>
-
-    {/* Section 9: Client Photo Submissions */}
-    <section style={{ marginBottom: '70px', textAlign: 'center' }}>
-      <h2 className="gold-text" style={{ marginBottom: '15px' }}>7. Customer Tagged Moments</h2>
-      <p style={{ color: '#888' }}>Real photos sent in by our satisfied clients after installation.</p>
     </section>
 
     {/* Section 10: Gallery CTA */}
@@ -841,7 +888,7 @@ const GalleryPage = ({ zipImages, isLoading, setActiveTab }) => (
 /* ==========================================================================
    5. CONTACT PAGE (10 SECTIONS)
    ========================================================================== */
-const ContactPage = () => (
+const ContactPage = ({ customerPhoto, photoPreview, onPhotoUpload, onSubmitPhoto }) => (
   <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 20px' }}>
     
     {/* Section 1: Intro */}
@@ -869,7 +916,19 @@ const ContactPage = () => (
           <option>Both Curtains & Mosquito Mesh</option>
         </select>
         <textarea placeholder="Describe window counts or custom requirements..." rows="4" style={{ padding: '14px', background: '#080808', border: '1px solid #333', color: '#fff', borderRadius: '4px' }}></textarea>
-        <button type="button" className="btn-gold" style={{ padding: '16px', cursor: 'pointer', fontSize: '1rem' }}>Submit Free Measurement Request</button>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: '#ccc', fontSize: '0.95rem' }}>
+          Attach a photo of your window or existing setup
+          <input type="file" accept="image/*" onChange={onPhotoUpload} style={{ color: '#fff', paddingTop: '4px' }} />
+        </label>
+        {photoPreview && (
+          <div style={{ border: '1px solid #d4af37', borderRadius: '8px', padding: '12px', background: '#0e0e0e' }}>
+            <img src={photoPreview} alt="Uploaded preview" style={{ width: '100%', maxHeight: '260px', objectFit: 'cover', borderRadius: '6px' }} />
+            <p style={{ color: '#d4af37', margin: '8px 0 0', fontSize: '0.9rem' }}>
+              {customerPhoto?.name || 'Photo attached successfully'}
+            </p>
+          </div>
+        )}
+        <button type="button" className="btn-gold" style={{ padding: '16px', cursor: photoPreview ? 'pointer' : 'not-allowed', fontSize: '1rem', opacity: photoPreview ? 1 : 0.7 }} onClick={onSubmitPhoto} disabled={!photoPreview}>Submit Free Measurement Request</button>
       </form>
     </section>
 
@@ -877,18 +936,18 @@ const ContactPage = () => (
     <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '50px' }}>
       <div style={{ background: '#121212', padding: '25px', borderRadius: '8px', textAlign: 'center', border: '1px solid #222' }}>
         <h3 className="gold-text" style={{ margin: '0 0 8px 0' }}>📞 Phone Orders</h3>
-        <p style={{ color: '#aaa', margin: 0 }}>+1 (800) 555-GOLD / +91 98765 43210</p>
+        <p style={{ color: '#aaa', margin: 0 }}>+91 7502718156</p>
       </div>
       <div style={{ background: '#121212', padding: '25px', borderRadius: '8px', textAlign: 'center', border: '1px solid #222' }}>
         <h3 className="gold-text" style={{ margin: '0 0 8px 0' }}>✉️ Email Support</h3>
-        <p style={{ color: '#aaa', margin: 0 }}>orders@jillucurtains.com</p>
+        <p style={{ color: '#aaa', margin: 0 }}>jillucurtains1@gmail.com</p>
       </div>
     </section>
 
     {/* Section 4: Store Hours & Studio Visit */}
     <section style={{ background: '#0e0e0e', border: '1px solid #222', padding: '30px', borderRadius: '8px', textAlign: 'center', marginBottom: '50px' }}>
       <h3 className="gold-text" style={{ marginBottom: '10px' }}>Studio Working Hours</h3>
-      <p style={{ color: '#aaa', margin: 0 }}>Monday – Saturday: 9:00 AM – 8:30 PM | Sunday: By Appointment Only</p>
+      <p style={{ color: '#aaa', margin: 0 }}>Monday – Saturday: 10:00 AM – 6:30 PM | Sunday: By Appointment Only</p>
     </section>
 
     {/* Section 5: Service Location Coverage */}
